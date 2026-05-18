@@ -52,6 +52,27 @@ No separate value model needed — more efficient and simpler to implement.
 | Policy final selection accuracy | 64.5% |
 | Policy binomial test vs random | p=1.73e-20 |
 
+## LLM-as-a-Judge Validation
+
+To validate the n_labels proxy, Claude (claude-sonnet-4-5) evaluated 100 preference 
+pairs independently, assessing which document would be more useful to a legal 
+professional researching EU regulations.
+
+| Verdict | Count | % |
+|---|---|---|
+| Agrees with n_labels (A) | 51 | 51% |
+| TIE | 34 | 34% |
+| Disagrees with n_labels (B) | 15 | 15% |
+
+**Finding:** n_labels agreement at 51% is statistically indistinguishable from chance,
+confirming it is a weak proxy for legal relevance. Claude identifies qualitative 
+differences — conceptual depth, cross-framework applicability, fundamental vs. 
+administrative content — that n_labels misses entirely.
+
+**Production implication:** Replacing n_labels with LLM-as-a-Judge preferences would 
+generate higher-quality training data, likely improving GRPO policy performance 
+beyond the current 64.5% selection accuracy.
+
 ### Training Curves
 
 ![Reward Model Training](figures/02_reward_model_training.png)
@@ -103,6 +124,10 @@ purpose: penalizing drift from the reference model and preventing reward hacking
 vary slightly between runs. The learning trend (monotonic increase in
 selection accuracy) is consistent across runs; absolute epoch-1 values vary.
 
+**TIE handling:** 34% of LLM-as-a-Judge evaluations resulted in TIE verdicts. 
+In production, recommended strategy is to discard TIE pairs, preserving only 
+high-confidence preferences for reward model training.
+
 ## Limitations and Production Path
 
 This project demonstrates the RLHF pipeline at small scale. In production:
@@ -148,7 +173,8 @@ legal-rlhf/
 │   ├── 03_grpo_training.png
 │   └── 04_evaluation.png
 ├── notebooks/
-│   └── 00_eda.ipynb
+│   └── 00_eda.ipynb                # data exploration and pair construction
+│   └── 01_llm_judge.ipynb           # LLM-as-a-Judge validation of n_labels proxy
 ├── src/
 │   ├── reward_model.py          # reward model architecture and training
 │   ├── plot_metrics.py          # reward model training curves
