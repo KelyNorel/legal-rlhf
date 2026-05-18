@@ -52,11 +52,27 @@ No separate value model needed — more efficient and simpler to implement.
 | Policy final selection accuracy | 64.5% |
 | Policy binomial test vs random | p=1.73e-20 |
 
+### Training Curves
+
+![Reward Model Training](figures/02_reward_model_training.png)
+
+![GRPO Policy Training](figures/03_grpo_training.png)
+
+### Evaluation
+
+![Evaluation](figures/04_evaluation.png)
+
 ## Dataset
 
 **Source:** [lex_glue / eurlex](https://huggingface.co/datasets/lex_glue)  
 **Documents:** 55,000 EU legal texts with multi-label legal category annotations  
 **Preference pairs:** 5,000 (chosen: ≥5 labels, rejected: ≤2 labels)  
+
+### Preference Pair Construction
+
+![EDA Distributions](figures/00_eda_distributions.png)
+
+![Preference Pairs](figures/01_preference_pairs.png)
 
 ## Design Decisions
 
