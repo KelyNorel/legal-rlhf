@@ -20,6 +20,7 @@ from transformers import (
 import json
 import sys
 import os
+import random
 
 sys.path.append(os.path.dirname(__file__))
 from reward_model import RewardModel
@@ -30,7 +31,7 @@ DEVICE     = "mps" if torch.backends.mps.is_available() else "cpu"
 MODEL_NAME = "distilbert-base-uncased"
 MAX_LENGTH = 256
 BATCH_SIZE = 16
-EPOCHS     = 3
+EPOCHS     = 5
 LR         = 1e-5
 KL_COEF    = 0.1   # KL penalty — keeps policy close to reference
 
@@ -105,27 +106,29 @@ def grpo_loss(rewards, policy_logits, ref_logits):
     
     total_loss = policy_loss + KL_COEF * kl
     return total_loss, policy_loss.item(), kl.item()
-    
+
 def train():
     df = pd.read_csv("data/preference_pairs.csv")
-    # Use chosen docs for policy training
-    texts = df['chosen'].tolist()[:1000]  # subset for speed
+    texts = df['chosen'].tolist()[:1000]
+    random.shuffle(texts)
     print(f"Training on {len(texts)} documents")
 
     optimizer = torch.optim.AdamW(policy.parameters(), lr=LR)
-    
+
     metrics = {
         "train_losses": [],
         "policy_losses": [],
         "kl_values": [],
-        "mean_rewards": []
+        "mean_rewards": [],
+        "selection_accuracy": []  # did policy pick highest-reward doc?
     }
 
     for epoch in range(EPOCHS):
-        epoch_loss, epoch_pl, epoch_kl, epoch_reward = 0, 0, 0, 0
+        random.shuffle(texts)
+        epoch_loss, epoch_pl, epoch_kl, epoch_reward, epoch_acc = 0, 0, 0, 0, 0
         n_batches = 0
 
-        for i in range(0, len(texts), BATCH_SIZE):
+        for i in range(0, len(texts) - BATCH_SIZE, BATCH_SIZE):
             batch_texts = texts[i:i+BATCH_SIZE]
 
             # Tokenize for policy
@@ -137,17 +140,17 @@ def train():
                 return_tensors='pt'
             ).to(DEVICE)
 
-            # Get rewards from reward model
-            rewards = get_reward(batch_texts, reward_model, tokenizer)
+            # Reward model scores each doc in batch
+            rewards = get_reward(batch_texts, reward_model, tokenizer).detach()
 
-            # Policy forward pass
+            # Policy scores each doc
             policy_out = policy(
                 input_ids=enc['input_ids'],
                 attention_mask=enc['attention_mask']
             )
             policy_logits = policy_out.logits
 
-            # Reference forward pass (no grad)
+            # Reference scores (no grad)
             with torch.no_grad():
                 ref_out = reference(
                     input_ids=enc['input_ids'],
@@ -160,29 +163,38 @@ def train():
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
             optimizer.step()
+
+            # Selection accuracy: did policy rank highest-reward doc highest?
+            best_reward_idx = rewards.argmax().item()
+            best_policy_idx = torch.sigmoid(policy_logits).argmax().item()
+            acc = float(best_reward_idx == best_policy_idx)
 
             epoch_loss   += loss.item()
             epoch_pl     += pl
             epoch_kl     += kl
             epoch_reward += rewards.mean().item()
+            epoch_acc    += acc
             n_batches    += 1
 
         avg_loss   = epoch_loss   / n_batches
         avg_pl     = epoch_pl     / n_batches
         avg_kl     = epoch_kl     / n_batches
         avg_reward = epoch_reward / n_batches
+        avg_acc    = epoch_acc    / n_batches
 
         metrics["train_losses"].append(avg_loss)
         metrics["policy_losses"].append(avg_pl)
         metrics["kl_values"].append(avg_kl)
         metrics["mean_rewards"].append(avg_reward)
+        metrics["selection_accuracy"].append(avg_acc)
 
         print(f"Epoch {epoch+1}/{EPOCHS} | "
               f"Loss: {avg_loss:.4f} | "
-              f"Policy Loss: {avg_pl:.4f} | "
               f"KL: {avg_kl:.4f} | "
-              f"Mean Reward: {avg_reward:.4f}")
+              f"Mean Reward: {avg_reward:.4f} | "
+              f"Selection Acc: {avg_acc:.3f}")
 
     # Save
     torch.save(policy.state_dict(), "data/policy_model.pt")
