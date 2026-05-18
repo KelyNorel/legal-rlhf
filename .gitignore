@@ -1,0 +1,21 @@
+# Data
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Models (pesados)
+*.bin
+*.pt
+*.safetensors
+models/
+
+# OS
+.DS_Store
+go_venv.txt
