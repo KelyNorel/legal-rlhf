@@ -4,7 +4,8 @@ End-to-end RLHF pipeline applied to legal document relevance ranking,
 using the EURLEX dataset from lex_glue (55,000 EU legal documents).
 
 Motivated by prior work showing that supervised fine-tuning with limited
-labeled data collapses to constant outputs (Norel et al., under review).
+labeled data collapses to constant outputs — demonstrated in the
+[pain-llm-finetuning](https://github.com/KelyNorel/pain-llm-finetuning) project.
 RLHF with preference pairs provides a more robust training signal —
 relative preferences are easier to learn than absolute scores.
 
